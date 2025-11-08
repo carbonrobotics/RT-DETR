@@ -182,6 +182,7 @@ class RTDETRCriterionv2(nn.Module):
             assert 'dn_meta' in outputs, ''
             indices = self.get_cdn_matched_indices(outputs['dn_meta'], targets)
             dn_num_boxes = num_boxes * outputs['dn_meta']['dn_num_group']
+
             for i, aux_outputs in enumerate(outputs['dn_aux_outputs']):
                 for loss in self.losses:
                     meta = self.get_loss_meta_info(loss, aux_outputs, targets, indices)
@@ -189,6 +190,15 @@ class RTDETRCriterionv2(nn.Module):
                     l_dict = {k: l_dict[k] * self.weight_dict[k] for k in l_dict if k in self.weight_dict}
                     l_dict = {k + f'_dn_{i}': v for k, v in l_dict.items()}
                     losses.update(l_dict)
+        elif 'aux_outputs' in outputs and self.training:
+            # When dn_aux_outputs is not present (e.g., no targets), add zero losses to maintain consistent keys across ranks
+            # dn_aux_outputs has one more layer than aux_outputs (decoder layers + 1)
+            device = next(iter(outputs.values())).device
+            num_dn_layers = len(outputs['aux_outputs']) + 1
+            for i in range(num_dn_layers):
+                for k in ['loss_vfl', 'loss_bbox', 'loss_giou']:
+                    if k in self.weight_dict:
+                        losses[f'{k}_dn_{i}'] = torch.tensor(0.0, device=device)
 
         # In case of encoder auxiliary losses. For rtdetr v2
         if 'enc_aux_outputs' in outputs:
