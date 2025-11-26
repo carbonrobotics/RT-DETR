@@ -33,7 +33,8 @@ class RTDETRPostProcessor(nn.Module):
         num_classes=80, 
         use_focal_loss=True, 
         num_top_queries=300, 
-        remap_mscoco_category=False
+        remap_mscoco_category=False,
+        orig_target_sizes: Optional[torch.Tensor] = None,
     ) -> None:
         super().__init__()
         self.use_focal_loss = use_focal_loss
@@ -41,18 +42,19 @@ class RTDETRPostProcessor(nn.Module):
         self.num_classes = int(num_classes)
         self.remap_mscoco_category = remap_mscoco_category 
         self.deploy_mode = False 
+        self.orig_target_sizes = orig_target_sizes
 
     def extra_repr(self) -> str:
         return f'use_focal_loss={self.use_focal_loss}, num_classes={self.num_classes}, num_top_queries={self.num_top_queries}'
     
     # def forward(self, outputs, orig_target_sizes):
-    def forward(self, outputs, orig_target_sizes: Optional[torch.Tensor] = None):
+    def forward(self, outputs, ):
         logits, boxes = outputs['pred_logits'], outputs['pred_boxes']
         # orig_target_sizes = torch.stack([t["orig_size"] for t in targets], dim=0)        
 
         bbox_pred = torchvision.ops.box_convert(boxes, in_fmt='cxcywh', out_fmt='xyxy')
-        if orig_target_sizes is not None:
-            bbox_pred *= orig_target_sizes.repeat(1, 2).unsqueeze(1)
+        if self.orig_target_sizes is not None:
+            bbox_pred *= self.orig_target_sizes.repeat(1, 2).unsqueeze(1)
 
         if self.use_focal_loss:
             scores = F.sigmoid(logits)
